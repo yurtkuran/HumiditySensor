@@ -30,6 +30,7 @@ Adafruit_HTU31D htu = Adafruit_HTU31D();
 uint32_t heaterTimestamp;
 uint32_t displayTimestamp;
 bool heaterEnabled = false;
+sensors_event_t humidity, temp;
 
 // setup moving averages
 const long points   = 20;
@@ -38,7 +39,7 @@ const long period = points*delayMs;
 MovingAverageFloat <points> avgHumidity;
 MovingAverageFloat <points> avgTemp;
 
-const boolean loopSensorReading = true;
+const bool loopSensorReading = true;
 
 float tempF(float c ) {
   return 1.8*c + 32;
@@ -54,6 +55,12 @@ void printSensorValues(float avgTemp, float avgHumidity, float relativeHumidity)
   printf("Avg Temp [F]: %.1f\n", tempF(avgTemp)); 
   printf("Avg Humidity: %.1f\n", avgHumidity); 
   printf("Humidity:     %.1f\n\n", relativeHumidity); 
+}
+
+void readSensor() {
+  htu.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+  avgHumidity.add(humidity.relative_humidity); 
+  avgTemp.add(temp.temperature);
 }
 
 void setup() {
@@ -93,12 +100,18 @@ void setup() {
   Serial.printf("Period between sensor measurements: %.1f seconds\n\n", (float)period/1000);
 }
 
-void loop() {
-  sensors_event_t humidity, temp;
-  htu.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+void toggleHeater() {
+  heaterEnabled = !heaterEnabled;
+  if (!htu.enableHeater(heaterEnabled)) {
+    Serial.println("Emable heater failed");
+  }
+  heaterTimestamp = millis();
+}
 
-  avgHumidity.add(humidity.relative_humidity); 
-  avgTemp.add(temp.temperature); 
+void loop() {
+
+  // read sensor
+  readSensor();
 
   // update display
   if ((millis() - displayTimestamp) > period) {
@@ -108,11 +121,7 @@ void loop() {
 
   // toggle the heater every 5 seconds
   if ((millis() - heaterTimestamp) > 5000) {
-    heaterEnabled = !heaterEnabled;
-    if (! htu.enableHeater(heaterEnabled)) {
-      Serial.println("Emable heater failed");
-    }
-    heaterTimestamp = millis();
+    toggleHeater();
   }
 
   delay(delayMs);
